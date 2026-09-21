@@ -1,0 +1,33 @@
+# Sync-wave 0. Not requested explicitly by name in the resume line, but
+# HPA autoscaling doesn't work without it — the HorizontalPodAutoscaler
+# reads CPU/memory percentages from the metrics.k8s.io API this serves, and
+# Terraform's cluster_addons list (coredns, kube-proxy, vpc-cni,
+# eks-pod-identity-agent) doesn't include it. Without this Application,
+# `kubectl get hpa` would sit at "<unknown>" forever.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: metrics-server
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  project: default
+  source:
+    repoURL: https://kubernetes-sigs.github.io/metrics-server/
+    chart: metrics-server
+    # Pin deliberately rather than float "*" — bump with
+    # `helm repo update && helm search repo metrics-server/metrics-server --versions`.
+    targetRevision: 3.12.2
+    helm:
+      values: |
+        resources:
+          requests: { cpu: 10m, memory: 32Mi }
+          limits: { cpu: 100m, memory: 64Mi }
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kube-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

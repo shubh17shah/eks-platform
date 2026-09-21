@@ -1,0 +1,11 @@
+# payment-service — the second and last service with the Istio sidecar
+# enabled. It's the most failure-sensitive path in the platform (a stuck
+# upstream shouldn't hang a payment call indefinitely), so it's the natural
+# place to demonstrate the VirtualService/DestinationRule retry, timeout
+# and circuit-breaking policy defined in the base chart. Still no ingress
+# or HPA — it's only ever called internally, from order-service.
+nameOverride: payment-service
+serviceName: payment-service
+
+istio:
+  enabled: true

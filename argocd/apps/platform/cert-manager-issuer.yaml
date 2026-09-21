@@ -1,0 +1,21 @@
+# Sync-wave 1: the ClusterIssuer CRD only exists once the cert-manager
+# Application (wave 0) has synced, so this has to land strictly after it.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cert-manager-issuer
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/shubh17shah/eks-platform.git
+    targetRevision: main
+    path: argocd/manifests/cert-manager
+  destination:
+    server: https://kubernetes.default.svc
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

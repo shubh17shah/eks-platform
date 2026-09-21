@@ -1,0 +1,38 @@
+# app-of-apps root. This is the ONE manifest applied by hand, once, after
+# ArgoCD itself is bootstrapped (see bootstrap/). From here on ArgoCD
+# manages itself: this Application watches argocd/apps/ (recursively, so it
+# also picks up argocd/apps/platform/) and every file it finds there is
+# another Application it creates, syncs, prunes and self-heals.
+#
+#   kubectl apply -n argocd -f argocd/root-app.yaml
+#
+# Sync-wave annotations on the child Applications (platform components at
+# negative/low waves, the 10 microservices at wave 10) make platform
+# infrastructure land before anything that depends on it — see
+# argocd/apps/platform/ for the ordering.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: root-app
+  namespace: argocd
+  finalizers:
+    # Cascade delete: removing this Application also removes every child
+    # Application it created (and, transitively, everything they deployed).
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/shubh17shah/eks-platform.git
+    targetRevision: main
+    path: argocd/apps
+    directory:
+      recurse: true
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

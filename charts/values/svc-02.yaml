@@ -1,0 +1,4 @@
+# auth-service — internal only, ClusterIP behind api-gateway. No ingress,
+# no HPA, no Istio sidecar: fixed at 1 replica to keep the sandbox cheap.
+nameOverride: auth-service
+serviceName: auth-service

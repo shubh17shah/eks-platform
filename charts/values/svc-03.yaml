@@ -1,0 +1,4 @@
+# catalog-service — internal only, ClusterIP. Product/catalog reads are
+# cheap and cacheable, so it doesn't need HPA or a mesh sidecar here.
+nameOverride: catalog-service
+serviceName: catalog-service

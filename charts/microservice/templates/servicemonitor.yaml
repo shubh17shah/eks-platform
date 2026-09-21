@@ -1,0 +1,26 @@
+{{- if .Values.serviceMonitor.enabled -}}
+# Picked up by kube-prometheus-stack's Prometheus custom resource, which is
+# configured (see argocd/apps/platform/kube-prometheus-stack.yaml) with
+# serviceMonitorSelectorNilUsesHelmValues: false so it watches every
+# ServiceMonitor in the cluster, not just ones carrying its own release
+# label. Requires the kube-prometheus-stack CRDs to already exist, which
+# ArgoCD sync-wave ordering guarantees (platform components sync before
+# any of the 10 microservice apps).
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "microservice.fullname" . }}
+  labels:
+    {{- include "microservice.labels" . | nindent 4 }}
+    {{- with .Values.serviceMonitor.additionalLabels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "microservice.selectorLabels" . | nindent 6 }}
+  endpoints:
+    - port: http
+      path: {{ .Values.serviceMonitor.path }}
+      interval: {{ .Values.serviceMonitor.interval }}
+{{- end }}

@@ -1,0 +1,21 @@
+# Sync-wave 2: the PeerAuthentication CRD only exists once istio-base (wave
+# 0) has synced and istiod (wave 1) is up to actually enforce it.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: istio-mesh-policy
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/shubh17shah/eks-platform.git
+    targetRevision: main
+    path: argocd/manifests/istio
+  destination:
+    server: https://kubernetes.default.svc
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

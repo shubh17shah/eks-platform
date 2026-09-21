@@ -1,0 +1,32 @@
+# Namespaces are created here as plain manifests rather than relying on
+# each Application's CreateNamespace=true sync option, because the "apps"
+# namespace needs the istio-injection label attached AT creation — that
+# sync option only ever creates a bare namespace with no labels.
+#
+# Wrapped in a single `List` so this stays one YAML document (simpler to
+# lint/validate) while still applying as four independent Namespace objects
+# — kubectl and ArgoCD both flatten a List into its items.
+apiVersion: v1
+kind: List
+items:
+  - apiVersion: v1
+    kind: Namespace
+    metadata:
+      name: apps
+      labels:
+        # Every pod created in this namespace gets an Istio sidecar unless
+        # it explicitly opts out (see the microservice chart's
+        # deployment.yaml) — only api-gateway and payment-service don't.
+        istio-injection: enabled
+  - apiVersion: v1
+    kind: Namespace
+    metadata:
+      name: monitoring
+  - apiVersion: v1
+    kind: Namespace
+    metadata:
+      name: cert-manager
+  - apiVersion: v1
+    kind: Namespace
+    metadata:
+      name: istio-system

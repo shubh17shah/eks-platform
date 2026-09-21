@@ -1,0 +1,49 @@
+# Sync-wave 0. Deploys into kube-system with the ServiceAccount name
+# "aws-load-balancer-controller" because that exact name (and namespace) is
+# hard-coded into the IRSA trust policy Terraform already created — see
+# terraform/irsa.tf's aws_iam_role.alb_controller, which trusts only
+# system:serviceaccount:kube-system:aws-load-balancer-controller.
+#
+# MANUAL STEP before this Application will actually work: replace
+# REPLACE_WITH_ACCOUNT_ID below with the account Terraform deployed into
+# (`aws sts get-caller-identity --query Account --output text`, or read it
+# straight off `terraform output alb_controller_role_arn`). GitOps manifests
+# are static — they can't reach into Terraform state for it — so this is
+# the one place a real AWS account ID has to be pasted in by hand.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: aws-load-balancer-controller
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  project: default
+  source:
+    repoURL: https://aws.github.io/eks-charts
+    chart: aws-load-balancer-controller
+    # Pin deliberately rather than float "*" — bump with
+    # `helm repo update && helm search repo eks/aws-load-balancer-controller --versions`.
+    targetRevision: 1.9.2
+    helm:
+      values: |
+        clusterName: eks-platform
+        region: ap-south-1
+        # vpcId intentionally omitted — the controller auto-discovers it
+        # from EC2 instance metadata on the node it's running on.
+        serviceAccount:
+          create: true
+          name: aws-load-balancer-controller
+          annotations:
+            eks.amazonaws.com/role-arn: "arn:aws:iam::REPLACE_WITH_ACCOUNT_ID:role/eks-platform-alb-controller"
+        replicaCount: 1
+        resources:
+          requests: { cpu: 50m, memory: 100Mi }
+          limits: { cpu: 200m, memory: 200Mi }
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kube-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

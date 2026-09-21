@@ -1,0 +1,18 @@
+# ---------------------------------------------------------------------------
+# Rename to backend.tf and fill in the bucket name AFTER running bootstrap/.
+#
+#   cd bootstrap && terraform init && terraform apply
+#   terraform output -raw state_bucket
+#
+# The backend cannot store its own state, hence the two-stage setup.
+# ---------------------------------------------------------------------------
+
+terraform {
+  backend "s3" {
+    bucket         = "eks-platform-tfstate-REPLACE_ME"
+    key            = "eks-platform/terraform.tfstate"
+    region         = "ap-south-1"
+    dynamodb_table = "eks-platform-tflock"
+    encrypt        = true
+  }
+}

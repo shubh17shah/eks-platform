@@ -1,0 +1,71 @@
+# Sync-wave 0. Backs the "full Prometheus/Grafana monitoring stack" claim:
+# Prometheus + Grafana + Alertmanager + kube-state-metrics + node-exporter,
+# all from one chart. serviceMonitorSelectorNilUsesHelmValues: false is the
+# key setting — without it, Prometheus only scrapes ServiceMonitors
+# carrying this release's own Helm label, so the 10 microservices'
+# ServiceMonitors (in the "apps" namespace, unrelated release) would be
+# silently ignored.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kube-prometheus-stack
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  project: default
+  source:
+    repoURL: https://prometheus-community.github.io/helm-charts
+    chart: kube-prometheus-stack
+    # Pin deliberately rather than float "*" — bump with
+    # `helm repo update && helm search repo prometheus-community/kube-prometheus-stack --versions`.
+    targetRevision: 62.7.0
+    helm:
+      values: |
+        prometheus:
+          prometheusSpec:
+            serviceMonitorSelectorNilUsesHelmValues: false
+            podMonitorSelectorNilUsesHelmValues: false
+            # No aws-ebs-csi-driver addon in terraform/eks.tf, so there's no
+            # StorageClass a PVC could bind to. Falls back to the operator's
+            # default emptyDir — metrics are lost on pod restart, which is
+            # an acceptable trade for a cost-optimized sandbox. Add the
+            # ebs-csi-driver addon + a gp3 StorageClass, then a
+            # `storageSpec`, to make this durable.
+            retention: 6h
+            resources:
+              requests: { cpu: 100m, memory: 256Mi }
+              limits: { cpu: 500m, memory: 512Mi }
+        alertmanager:
+          alertmanagerSpec:
+            resources:
+              requests: { cpu: 10m, memory: 32Mi }
+              limits: { cpu: 100m, memory: 64Mi }
+        grafana:
+          # Admin password intentionally left unset: the chart auto-generates
+          # a random one into a Secret rather than this ever needing to hold
+          # a plaintext credential. Retrieve it with:
+          #   kubectl get secret -n monitoring kube-prometheus-stack-grafana \
+          #     -o jsonpath='{.data.admin-password}' | base64 -d
+          persistence:
+            enabled: false
+          resources:
+            requests: { cpu: 50m, memory: 128Mi }
+            limits: { cpu: 200m, memory: 256Mi }
+        kube-state-metrics:
+          resources:
+            requests: { cpu: 10m, memory: 32Mi }
+            limits: { cpu: 100m, memory: 64Mi }
+        prometheus-node-exporter:
+          resources:
+            requests: { cpu: 10m, memory: 32Mi }
+            limits: { cpu: 50m, memory: 64Mi }
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true

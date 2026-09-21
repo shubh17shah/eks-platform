@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "microservice.fullname" . }}
+  labels:
+    {{- include "microservice.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - port: {{ .Values.service.port }}
+      targetPort: {{ .Values.service.targetPort }}
+      protocol: TCP
+      # Named so the DestinationRule/VirtualService (and Istio's protocol
+      # sniffing) can address it as "http" instead of a bare port number.
+      name: http
+  selector:
+    {{- include "microservice.selectorLabels" . | nindent 4 }}

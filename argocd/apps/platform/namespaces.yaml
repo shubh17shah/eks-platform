@@ -1,0 +1,23 @@
+# Sync-wave -10: created before literally anything else, since
+# cert-manager/istio/monitoring/aws-lb-controller all land into these
+# namespaces (or, for "apps", need the istio-injection label present
+# before the first microservice pod is ever scheduled into it).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: namespaces
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-10"
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/shubh17shah/eks-platform.git
+    targetRevision: main
+    path: argocd/manifests/namespaces
+  destination:
+    server: https://kubernetes.default.svc
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

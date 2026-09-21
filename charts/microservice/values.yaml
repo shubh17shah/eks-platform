@@ -1,0 +1,143 @@
+# Default values for the generic `microservice` chart.
+#
+# These defaults are deliberately conservative — everything is OFF unless a
+# per-service file in charts/values/ turns it on — because this chart backs
+# 10 concurrent releases on a 2x t3.small node group (~4GB RAM total, most
+# of it already spoken for by the platform: ArgoCD, kube-prometheus-stack,
+# istiod, cert-manager, the ALB controller). Ingress, HPA and the Istio
+# sidecar are opt-in per service for exactly that reason.
+
+nameOverride: ""
+fullnameOverride: ""
+
+image:
+  # All 10 services share this one image (apps/demo-service) — only the
+  # SERVICE_NAME env var and a handful of flags differ between them.
+  repository: ghcr.io/shubh17shah/demo-service
+  tag: "v1"
+  pullPolicy: IfNotPresent
+
+# Ignored when hpa.enabled is true — the HPA owns replica count from then on
+# and Helm stops setting spec.replicas so the two don't fight every sync.
+replicaCount: 1
+
+# Read by the Go app at startup and printed by `/`. Defaults to the chart's
+# release/name via the _helpers.tpl "microservice.name" template if unset.
+serviceName: ""
+
+# Extra env vars, e.g. [{name: LOG_LEVEL, value: info}]
+env: []
+
+# Sized to fit t3.small (2 vCPU / 2GiB, ~1.4GiB allocatable after kubelet
+# reserves its share). At these requests, ~20 replicas fit a single node on
+# memory alone — the real ceiling in this cluster is the platform stack.
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 200m
+    memory: 256Mi
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8080
+
+# Only the public-facing service (api-gateway) should set this true — every
+# ALB Ingress is a real Application Load Balancer AWS bills for hourly.
+ingress:
+  enabled: false
+  className: alb
+  annotations: {}
+  host: ""
+  path: /
+  pathType: Prefix
+  tls: []
+  # e.g.:
+  # tls:
+  #   - hosts: ["api.eks-platform.example.com"]
+  #     secretName: api-gateway-tls
+
+# Keep to 1-2 services cluster-wide; each active HPA is another thing
+# fighting the other 9 services for the same handful of free millicores.
+hpa:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 4
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+podAnnotations: {}
+podLabels: {}
+
+# Pod-level: drop root entirely. Pairs with the distroless/nonroot image
+# built in apps/demo-service (USER 65532, "nobody" in distroless:nonroot).
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  runAsGroup: 65532
+  fsGroup: 65532
+  seccompProfile:
+    type: RuntimeDefault
+
+# Container-level: no privilege escalation, read-only rootfs (deployment.yaml
+# mounts an emptyDir at /tmp so this doesn't break anything that needs to
+# write scratch files), and every Linux capability dropped.
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+probes:
+  liveness:
+    path: /healthz
+    initialDelaySeconds: 5
+    periodSeconds: 10
+  readiness:
+    path: /readyz
+    initialDelaySeconds: 3
+    periodSeconds: 5
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+# Scraped by kube-prometheus-stack. Defaults to on for every service since
+# a ServiceMonitor costs no extra pods/CPU — it's just a CRD the Prometheus
+# Operator watches, so there's no reason to keep it opt-in like the heavier
+# toggles above.
+serviceMonitor:
+  enabled: true
+  interval: 30s
+  path: /metrics
+  additionalLabels: {}
+
+# Off by default (see the resources note at the top of this file — a sidecar
+# is ~60-90Mi extra per pod, which adds up fast across 10 services). Turn on
+# per-service in charts/values/ to get a sidecar plus the VirtualService /
+# DestinationRule below for retries, timeouts and outlier detection
+# (circuit breaking) on the in-mesh (east-west) path. North-south ingress
+# still goes through the ALB, not an Istio gateway, so this only affects
+# service-to-service traffic.
+#
+# Requires the "apps" namespace to carry the istio-injection=enabled label
+# (see argocd/manifests/namespaces) — the sidecar injector webhook only
+# looks at labeled namespaces. When istio.enabled is false here, the pod
+# gets an explicit sidecar.istio.io/inject: "false" annotation so it opts
+# out of that namespace-wide injection instead of silently getting a
+# sidecar anyway.
+istio:
+  enabled: false
+  timeout: 10s
+  retries:
+    attempts: 3
+    perTryTimeout: 2s
+    retryOn: "5xx,reset,connect-failure"

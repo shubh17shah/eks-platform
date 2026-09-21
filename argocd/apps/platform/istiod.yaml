@@ -1,0 +1,47 @@
+# Sync-wave 1: the control plane, deployed after istio-base's CRDs exist.
+# No istio-ingressgateway anywhere in this platform on purpose — north-south
+# traffic already comes in through the ALB (aws-load-balancer-controller),
+# so a second, redundant LoadBalancer Service for an ingress gateway would
+# just be another ELB AWS bills for hourly with no traffic reason to exist.
+# Istio here is scoped to what it's actually good at in this setup: mesh
+# (east-west) mTLS, retries, timeouts and circuit breaking between the two
+# services that opt into a sidecar (see charts/values/svc-01.yaml and
+# svc-06.yaml).
+#
+# global.proxy.resources sets the DEFAULT sidecar footprint injected into
+# every meshed pod — Istio's own stock default (100m/128Mi request) is
+# already close to a t3.small's entire allocatable CPU per pod, so this
+# gets overridden down explicitly.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: istiod
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  project: default
+  source:
+    repoURL: https://istio-release.storage.googleapis.com/charts
+    chart: istiod
+    # Pin deliberately rather than float "*" — bump with
+    # `helm repo update && helm search repo istio/istiod --versions`.
+    targetRevision: 1.23.2
+    helm:
+      values: |
+        pilot:
+          resources:
+            requests: { cpu: 50m, memory: 128Mi }
+            limits: { cpu: 200m, memory: 256Mi }
+        global:
+          proxy:
+            resources:
+              requests: { cpu: 10m, memory: 64Mi }
+              limits: { cpu: 100m, memory: 128Mi }
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: istio-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

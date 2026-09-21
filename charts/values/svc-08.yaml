@@ -1,0 +1,12 @@
+# search-service — the platform's second (and last) HPA. Query load is the
+# most naturally bursty pattern of the 10 services, making it the clearest
+# demo of autoscaling reacting to CPU pressure. No ingress: it's still only
+# reachable through api-gateway, not directly from outside the cluster.
+nameOverride: search-service
+serviceName: search-service
+
+hpa:
+  enabled: true
+  minReplicas: 1
+  maxReplicas: 4
+  targetCPUUtilizationPercentage: 70

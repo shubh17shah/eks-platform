@@ -1,0 +1,30 @@
+{{- if .Values.istio.enabled -}}
+# Mesh-internal (east-west) traffic policy only — "mesh" as the gateway
+# means this applies to sidecar-to-sidecar calls between services, not to
+# north-south ingress (that's still the ALB, see ingress.yaml). This is
+# what actually backs "Istio traffic management": automatic retries on
+# transient upstream failures and a bounded per-try/overall timeout so one
+# slow dependency can't cascade into a pile of blocked callers.
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: {{ include "microservice.fullname" . }}
+  labels:
+    {{- include "microservice.labels" . | nindent 4 }}
+spec:
+  hosts:
+    - {{ include "microservice.fullname" . }}
+  gateways:
+    - mesh
+  http:
+    - timeout: {{ .Values.istio.timeout }}
+      retries:
+        attempts: {{ .Values.istio.retries.attempts }}
+        perTryTimeout: {{ .Values.istio.retries.perTryTimeout }}
+        retryOn: {{ .Values.istio.retries.retryOn | quote }}
+      route:
+        - destination:
+            host: {{ include "microservice.fullname" . }}
+            port:
+              number: {{ .Values.service.port }}
+{{- end }}

@@ -1,0 +1,26 @@
+{{- if .Values.istio.enabled -}}
+# Circuit breaking: eject an endpoint from the load-balancing pool after
+# repeated 5xx responses instead of continuing to send it traffic, and cap
+# how much concurrent load any one connection can push. Paired with the
+# VirtualService's retry policy this is the standard Istio resilience combo
+# — retries handle blips, outlier detection handles a genuinely unhealthy
+# pod.
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: {{ include "microservice.fullname" . }}
+  labels:
+    {{- include "microservice.labels" . | nindent 4 }}
+spec:
+  host: {{ include "microservice.fullname" . }}
+  trafficPolicy:
+    connectionPool:
+      http:
+        http1MaxPendingRequests: 50
+        maxRequestsPerConnection: 10
+    outlierDetection:
+      consecutive5xxErrors: 5
+      interval: 30s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 50
+{{- end }}

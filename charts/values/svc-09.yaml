@@ -1,0 +1,3 @@
+# user-service — internal only, ClusterIP. Fixed at 1 replica.
+nameOverride: user-service
+serviceName: user-service

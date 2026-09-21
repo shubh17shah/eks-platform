@@ -1,0 +1,3 @@
+# cart-service — internal only, ClusterIP. Fixed at 1 replica.
+nameOverride: cart-service
+serviceName: cart-service

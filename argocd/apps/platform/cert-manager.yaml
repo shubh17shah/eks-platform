@@ -1,0 +1,49 @@
+# Sync-wave 0: installs alongside the other core platform add-ons.
+# installCRDs: true means this single release owns the Certificate /
+# ClusterIssuer / Issuer CRDs the selfsigned-cluster-issuer Application
+# (wave 1, below) and every Ingress with a cert-manager.io/cluster-issuer
+# annotation depend on.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cert-manager
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  project: default
+  source:
+    repoURL: https://charts.jetstack.io
+    chart: cert-manager
+    # Pin deliberately rather than float "*" — bump with
+    # `helm repo update && helm search repo jetstack/cert-manager --versions`.
+    targetRevision: v1.16.2
+    helm:
+      values: |
+        installCRDs: true
+        # t3.small-sized: cert-manager's three pods (controller, webhook,
+        # cainjector) don't need much beyond their defaults, but the chart
+        # defaults skew a bit generous for a 2-node sandbox.
+        resources:
+          requests: { cpu: 10m, memory: 32Mi }
+          limits: { cpu: 100m, memory: 128Mi }
+        webhook:
+          resources:
+            requests: { cpu: 10m, memory: 32Mi }
+            limits: { cpu: 100m, memory: 64Mi }
+        cainjector:
+          resources:
+            requests: { cpu: 10m, memory: 32Mi }
+            limits: { cpu: 100m, memory: 128Mi }
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: cert-manager
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      # cert-manager ships CRDs inside the chart itself; ArgoCD needs this
+      # to apply them without erroring on their size/ordering.
+      - ServerSideApply=true
