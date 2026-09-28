@@ -1,0 +1,7 @@
+# report-service — runs scheduled aggregation jobs (daily/weekly rollups
+# over TimescaleDB continuous aggregates, triggered by scheduler-service)
+# and stores the results. Internal only, ClusterIP. Fixed at 1 replica: it
+# runs on a schedule, not in the request path, so there's nothing here an
+# HPA would react to and no reason to pay for the Istio sidecar.
+nameOverride: report-service
+serviceName: report-service

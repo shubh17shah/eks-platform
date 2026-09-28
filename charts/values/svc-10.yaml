@@ -1,3 +1,0 @@
-# inventory-service — internal only, ClusterIP. Fixed at 1 replica.
-nameOverride: inventory-service
-serviceName: inventory-service

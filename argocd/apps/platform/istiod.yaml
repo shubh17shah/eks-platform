@@ -5,8 +5,8 @@
 # just be another ELB AWS bills for hourly with no traffic reason to exist.
 # Istio here is scoped to what it's actually good at in this setup: mesh
 # (east-west) mTLS, retries, timeouts and circuit breaking between the two
-# services that opt into a sidecar (see charts/values/svc-01.yaml and
-# svc-06.yaml).
+# services that opt into a sidecar (see charts/values/api-gateway.yaml and
+# auth-service.yaml).
 #
 # global.proxy.resources sets the DEFAULT sidecar footprint injected into
 # every meshed pod — Istio's own stock default (100m/128Mi request) is

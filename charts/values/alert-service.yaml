@@ -1,0 +1,7 @@
+# alert-service — evaluates device telemetry (via telemetry-query) against
+# configured thresholds and raises alert events for notification-service
+# to fan out. Internal only, ClusterIP. Fixed at 1 replica: threshold
+# evaluation runs on a poll/schedule, not per-request traffic, so it
+# doesn't need an HPA or the Istio sidecar.
+nameOverride: alert-service
+serviceName: alert-service

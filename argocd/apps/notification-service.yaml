@@ -1,5 +1,5 @@
 # notification-service — one Helm release of the shared charts/microservice chart,
-# parameterized by charts/values/svc-07.yaml. Sync-wave 10 so every platform
+# parameterized by charts/values/notification-service.yaml. Sync-wave 10 so every platform
 # component (namespaces, cert-manager, the ALB controller, metrics-server,
 # istiod, kube-prometheus-stack) is already healthy before this deploys —
 # the chart's ServiceMonitor/VirtualService/Ingress all depend on CRDs
@@ -19,7 +19,7 @@ spec:
     path: charts/microservice
     helm:
       valueFiles:
-        - ../values/svc-07.yaml
+        - ../values/notification-service.yaml
   destination:
     server: https://kubernetes.default.svc
     namespace: apps

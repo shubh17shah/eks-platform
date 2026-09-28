@@ -2,7 +2,7 @@
 #
 # These defaults are deliberately conservative — everything is OFF unless a
 # per-service file in charts/values/ turns it on — because this chart backs
-# 10 concurrent releases on a 2x t3.small node group (~4GB RAM total, most
+# 12 concurrent releases on a 2x t3.small node group (~4GB RAM total, most
 # of it already spoken for by the platform: ArgoCD, kube-prometheus-stack,
 # istiod, cert-manager, the ALB controller). Ingress, HPA and the Istio
 # sidecar are opt-in per service for exactly that reason.
@@ -11,9 +11,18 @@ nameOverride: ""
 fullnameOverride: ""
 
 image:
-  # All 10 services share this one image (apps/demo-service) — only the
-  # SERVICE_NAME env var and a handful of flags differ between them.
-  repository: ghcr.io/shubh17shah/demo-service
+  # All 12 services share this one image, built and published by the
+  # sibling application repo (github.com/shubh17shah/devsecops-pipeline) —
+  # only the SERVICE_NAME env var and a handful of *_ENABLED flags
+  # (Postgres/Redis/RabbitMQ) differ between them. See apps/README.md for
+  # why application source lives in that repo and not this one.
+  repository: ghcr.io/shubh17shah/telemetry-service
+  # CI in devsecops-pipeline builds, scans, signs and publishes a new image
+  # to the repository above, then commits/PRs a bump of THIS field back
+  # into this repo. ArgoCD watches this repo and syncs the change into the
+  # cluster — this field is the entire deploy boundary between "CI has a
+  # new image" and "the cluster runs it." Never edit the image via kubectl;
+  # bump it here.
   tag: "v1"
   pullPolicy: IfNotPresent
 
@@ -21,8 +30,9 @@ image:
 # and Helm stops setting spec.replicas so the two don't fight every sync.
 replicaCount: 1
 
-# Read by the Go app at startup and printed by `/`. Defaults to the chart's
-# release/name via the _helpers.tpl "microservice.name" template if unset.
+# Read by the app at startup (src/config.js) and printed by `/`. Defaults
+# to the chart's release/name via the _helpers.tpl "microservice.name"
+# template if unset.
 serviceName: ""
 
 # Extra env vars, e.g. [{name: LOG_LEVEL, value: info}]
@@ -56,11 +66,11 @@ ingress:
   tls: []
   # e.g.:
   # tls:
-  #   - hosts: ["api.eks-platform.example.com"]
+  #   - hosts: ["api.telemetry.internal"]
   #     secretName: api-gateway-tls
 
-# Keep to 1-2 services cluster-wide; each active HPA is another thing
-# fighting the other 9 services for the same handful of free millicores.
+# Keep to 2-3 services cluster-wide; each active HPA is another thing
+# fighting the other services for the same handful of free millicores.
 hpa:
   enabled: false
   minReplicas: 1
@@ -76,13 +86,17 @@ serviceAccount:
 podAnnotations: {}
 podLabels: {}
 
-# Pod-level: drop root entirely. Pairs with the distroless/nonroot image
-# built in apps/demo-service (USER 65532, "nobody" in distroless:nonroot).
+# Pod-level: drop root entirely. Pairs with the telemetry-service image's
+# (built in the sibling devsecops-pipeline repo) node:20-alpine base, which
+# ships a built-in non-root `node` user at uid/gid 1000 (see that repo's
+# Dockerfile runtime stage) — matched here rather than an arbitrary high
+# UID so fsGroup-mounted volumes (the /tmp emptyDir below) are actually
+# writable by the user the container runs as.
 podSecurityContext:
   runAsNonRoot: true
-  runAsUser: 65532
-  runAsGroup: 65532
-  fsGroup: 65532
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
   seccompProfile:
     type: RuntimeDefault
 
@@ -121,7 +135,7 @@ serviceMonitor:
   additionalLabels: {}
 
 # Off by default (see the resources note at the top of this file — a sidecar
-# is ~60-90Mi extra per pod, which adds up fast across 10 services). Turn on
+# is ~60-90Mi extra per pod, which adds up fast across 12 services). Turn on
 # per-service in charts/values/ to get a sidecar plus the VirtualService /
 # DestinationRule below for retries, timeouts and outlier detection
 # (circuit breaking) on the in-mesh (east-west) path. North-south ingress

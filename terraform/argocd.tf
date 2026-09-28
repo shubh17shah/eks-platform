@@ -68,7 +68,7 @@ resource "helm_release" "argocd" {
 }
 
 # Plant the root Application. Everything else - cert-manager, Istio,
-# kube-prometheus-stack, the ALB controller and all 10 microservices - is
+# kube-prometheus-stack, the ALB controller and all 12 microservices - is
 # pulled in by this one manifest via the app-of-apps pattern.
 resource "null_resource" "argocd_root_app" {
   count = var.bootstrap_gitops ? 1 : 0

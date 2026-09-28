@@ -18,8 +18,8 @@ real traffic, no manually-added load balancers).
 | Public IPv4 addresses                      |   2 | $0.010       | $0.24       | $7.30            | Since Feb 2024, **AWS bills $0.005/hr for every public IPv4 address**, including auto-assigned ones. Nodes need these because `enable_nat_gateway = false` puts them in public subnets — the NAT-avoidance saving is bigger than this cost, but it isn't literally free. |
 | NAT Gateway                                |   0 | $0.000       | $0.00       | $0.00            | Disabled (`enable_nat_gateway = false`, the project default). If flipped to `true`: per `variables.tf`'s own estimate, roughly **+$32/month**, billed hourly whether or not traffic flows, plus per-GB data processing. |
 | S3 state bucket + DynamoDB lock table      |   1+1 | ~$0.000    | ~$0.00      | <$0.05           | A few KB of versioned state; DynamoDB is `PAY_PER_REQUEST` and idle outside `terraform apply`/`plan`. Created once by `bootstrap/`, safe to leave running indefinitely. |
-| ALB (AWS Load Balancer Controller)         |   0 | n/a          | n/a         | n/a              | **Not created yet** — `irsa.tf` provisions the controller's IRSA role, and `argocd/apps/platform/aws-load-balancer-controller.yaml` + `charts/values/svc-01.yaml` (`api-gateway`, the only one of 10 services with `ingress.enabled: true`) fully define it, but nothing has run against a live cluster yet (see docs/DESIGN-DECISIONS.md). Budget for when it goes live: **exactly 1 ALB** (not 10 — only `api-gateway` has Ingress on), ~$0.0225/hr + LCU charges (roughly **$18–25/month** baseline) plus a public IP per AZ. |
-| Platform add-ons (cert-manager, Istio, kube-prometheus-stack, metrics-server) | — | $0 extra | $0 extra | $0 extra | Fully defined in `argocd/apps/platform/`, but these are pods on the **existing** 2 nodes, not new AWS resources — no separate line item. They do compete for the ~2.8GiB total allocatable RAM across both `t3.small` nodes; see docs/DESIGN-DECISIONS.md §8 for why only 2 of 10 services run an Istio sidecar. |
+| ALB (AWS Load Balancer Controller)         |   0 | n/a          | n/a         | n/a              | **Not created yet** — `irsa.tf` provisions the controller's IRSA role, and `argocd/apps/platform/aws-load-balancer-controller.yaml` + `charts/values/api-gateway.yaml` (`api-gateway`, the only one of 12 services with `ingress.enabled: true`) fully define it, but nothing has run against a live cluster yet (see docs/DESIGN-DECISIONS.md). Budget for when it goes live: **exactly 1 ALB** (not 12 — only `api-gateway` has Ingress on), ~$0.0225/hr + LCU charges (roughly **$18–25/month** baseline) plus a public IP per AZ. |
+| Platform add-ons (cert-manager, Istio, kube-prometheus-stack, metrics-server) | — | $0 extra | $0 extra | $0 extra | Fully defined in `argocd/apps/platform/`, but these are pods on the **existing** 2 nodes, not new AWS resources — no separate line item. They do compete for the ~2.8GiB total allocatable RAM across both `t3.small` nodes; see docs/DESIGN-DECISIONS.md §8 for why only 2 of 12 services run an Istio sidecar. |
 | **Total, as currently applied**            |     | **~$0.13**   | **~$3.10**  | **~$94.60**      | Control plane + nodes + EBS + public IPs. Excludes NAT (disabled) and the ALB (not deployed). |
 
 Run `make cost` for this same table from the CLI without opening this file.
@@ -36,7 +36,7 @@ Run `make cost` for this same table from the CLI without opening this file.
   rate as of the Feb 2024 change — the one figure here that isn't a regional
   estimate.
 - Figures exclude data transfer (egress), which is usage-dependent and
-  expected to be near-zero for a demo cluster with no real traffic.
+  expected to be near-zero for a sandbox cluster with no production traffic.
 
 ## The "forgot to destroy" scenario
 

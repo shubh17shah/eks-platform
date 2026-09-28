@@ -1,5 +1,5 @@
 # Mesh-wide mTLS for the "apps" namespace: every meshed pod (currently
-# api-gateway and payment-service — see the istio-injection note in
+# api-gateway and auth-service — see the istio-injection note in
 # argocd/manifests/namespaces) must present a mutual TLS cert to talk to
 # another meshed pod. Istio issues and rotates these certs itself via
 # istiod, so this is one line for a real, auto-rotating in-mesh mTLS

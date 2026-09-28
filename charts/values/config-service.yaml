@@ -1,0 +1,7 @@
+# config-service — stores and serves per-device configuration (sampling
+# rate, reporting interval, feature flags) that devices pull on checkin and
+# device-service/telemetry-ingest read to validate incoming data. Internal
+# only, ClusterIP. Fixed at 1 replica: config reads are cheap and
+# infrequent relative to telemetry volume, so no HPA or Istio sidecar here.
+nameOverride: config-service
+serviceName: config-service

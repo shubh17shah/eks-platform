@@ -16,7 +16,7 @@ items:
       labels:
         # Every pod created in this namespace gets an Istio sidecar unless
         # it explicitly opts out (see the microservice chart's
-        # deployment.yaml) — only api-gateway and payment-service don't.
+        # deployment.yaml) — only api-gateway and auth-service don't.
         istio-injection: enabled
   - apiVersion: v1
     kind: Namespace

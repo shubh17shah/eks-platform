@@ -1,18 +1,19 @@
 # eks-platform
 
 A cost-conscious AWS EKS platform — Terraform for the cluster, ArgoCD
-(GitOps) for 10 demo microservices behind Istio, cert-manager, and an ALB —
-built as a DevOps portfolio project, with every cost and security trade-off
-written down and justified.
+(GitOps) for 12 IoT telemetry microservices (PostgreSQL/TimescaleDB, Redis,
+RabbitMQ) behind Istio, cert-manager, and an ALB — built as a DevOps
+portfolio project, with every cost and security trade-off written down and
+justified.
 
 > **Status: in progress.** Two layers exist today, and they haven't met yet:
 > **(1) Infrastructure** — `terraform/` provisions the VPC, EKS cluster,
 > node group, and the ALB controller's IRSA role. Nobody has run
 > `terraform apply` against a real AWS account yet (no state, no live
 > cluster). **(2) GitOps/application layer** — `charts/` (one generic Helm
-> chart + 10 per-service values files) and `argocd/` (a complete app-of-apps:
+> chart + 12 per-service values files) and `argocd/` (a complete app-of-apps:
 > cert-manager, Istio, kube-prometheus-stack, metrics-server, the ALB
-> controller, and 10 microservice Applications, all sync-wave ordered) are
+> controller, and 12 microservice Applications, all sync-wave ordered) are
 > fully written. **ArgoCD is installed by Terraform** (`terraform/argocd.tf`,
 > a `helm_release` sized down for `t3.small` nodes) which then applies
 > `argocd/root-app.yaml`, handing the cluster over to GitOps. From that point
@@ -36,6 +37,41 @@ written down and justified.
 > breakdown and the "forgot to destroy" math.
 
 ---
+
+## Two-repo delivery model
+
+This repo does not build anything — it is the **source of truth for what
+runs**. Application source and CI live in a separate repo,
+[`shubh17shah/devsecops-pipeline`](https://github.com/shubh17shah/devsecops-pipeline);
+this repo (`eks-platform`) only holds Terraform, the Helm chart, and ArgoCD
+Applications. See [apps/README.md](apps/README.md) for the short version of
+why the split exists.
+
+```mermaid
+graph LR
+    Dev["Developer<br/>git push"]
+    CI["devsecops-pipeline CI<br/>test · SAST · build ·<br/>Trivy scan · SBOM + sign"]
+    GHCR[("ghcr.io/shubh17shah/<br/>telemetry-service")]
+    Bump["image.tag bump<br/>committed to eks-platform<br/>(charts/microservice/values.yaml)"]
+    ArgoCD["ArgoCD<br/>detects drift, syncs"]
+    Cluster["Workloads updated<br/>in the EKS cluster"]
+
+    Dev --> CI
+    CI -->|push image| GHCR
+    CI -->|open/push commit| Bump
+    Bump --> ArgoCD
+    ArgoCD -->|pull-based sync| Cluster
+
+    classDef repo fill:#f5f5f5,stroke:#999
+    class CI,GHCR,Dev repo
+```
+
+CI in the app repo never touches the cluster — it has no kubeconfig, no
+cluster credentials, nothing. Its only write access into this system is a
+commit/PR against this repo's `charts/microservice/values.yaml`. ArgoCD,
+running in-cluster, is the only thing that ever talks to the Kubernetes API,
+and it only acts on what's committed here — so a compromised or broken CI
+run can, at worst, propose a bad tag, not push one live.
 
 ## Architecture
 
@@ -64,9 +100,9 @@ graph TB
 
     ArgoCD["ArgoCD<br/>(app-of-apps defined in argocd/;<br/>must be installed by hand once)"]
     Platform["Platform add-ons<br/>ALB controller · cert-manager<br/>istiod · kube-prometheus-stack<br/>(ArgoCD Applications, sync-wave 0-2)"]
-    Apps["10 microservice Applications<br/>1 chart (charts/microservice) ×<br/>10 values files, sync-wave 10"]
+    Apps["12 microservice Applications<br/>1 chart (charts/microservice) ×<br/>12 values files, sync-wave 10"]
     ALB["ALB<br/>(1x — only api-gateway's Ingress<br/>has ingress.enabled: true)"]
-    Mesh["Istio sidecar mTLS + retries<br/>(api-gateway, payment-service only)"]
+    Mesh["Istio sidecar mTLS + retries<br/>(api-gateway, auth-service only)"]
 
     Git -.->|kubectl apply once| ArgoCD
     Git -.->|pull-based sync| Platform
@@ -121,13 +157,20 @@ small nodes — is in
   and DynamoDB table used as `terraform/`'s remote backend and lock.
 - **`charts/microservice/`** — one generic Helm chart (Deployment, Service,
   HPA, Ingress, ServiceAccount, ServiceMonitor, and Istio
-  VirtualService/DestinationRule, all templated and opt-in) backing all 10
-  demo services. **`charts/values/svc-01.yaml` … `svc-10.yaml`** are the
-  10 per-service values files — only `api-gateway` (svc-01) turns on
-  Ingress + HPA + the Istio sidecar; `search-service` (svc-08) also gets
-  an HPA; `payment-service` (svc-06) also gets the Istio sidecar; the
-  other 7 stay fixed at 1 replica, ClusterIP-only, to fit a 2-node
-  `t3.small` budget.
+  VirtualService/DestinationRule, all templated and opt-in) backing all 12
+  telemetry-platform services. **`charts/values/*.yaml`**, one file per
+  service and named to match it (`api-gateway.yaml`, `auth-service.yaml`,
+  `user-service.yaml`, `device-service.yaml`, `telemetry-ingest.yaml`,
+  `telemetry-query.yaml`, `alert-service.yaml`, `notification-service.yaml`,
+  `report-service.yaml`, `config-service.yaml`, `audit-service.yaml`,
+  `scheduler-service.yaml`), are the 12 per-service values files — only
+  `api-gateway` turns on Ingress + HPA + the Istio sidecar; `auth-service`
+  also gets the Istio sidecar (the only other one); `telemetry-ingest` and
+  `telemetry-query` also get an HPA (the RabbitMQ-consumer and
+  Timescale-read paths, the two genuinely bursty workloads); the other 8
+  stay fixed at 1 replica, ClusterIP-only, to fit a 2-node `t3.small`
+  budget — `scheduler-service` pins `replicaCount: 1` explicitly since it's
+  leader-elected and must never scale.
 - **`argocd/`** — the app-of-apps: `root-app.yaml` (the one manifest applied
   by hand, once ArgoCD exists) watches `argocd/apps/` recursively.
   `argocd/apps/platform/` (sync-waves -10 to 2) installs namespaces,
@@ -136,8 +179,11 @@ small nodes — is in
   deliberately **no** `istio-ingressgateway` — north-south traffic stays on
   the ALB), kube-prometheus-stack, and the ALB controller.
   `argocd/apps/*.yaml` (sync-wave 10, after the platform is healthy) are
-  the 10 microservice Applications, each the same chart pointed at a
+  the 12 microservice Applications, each the same chart pointed at a
   different values file.
+- **`apps/`** — no application code. Just a pointer
+  ([apps/README.md](apps/README.md)) to the sibling `devsecops-pipeline`
+  repo, which owns the `telemetry-service` source and CI.
 - **Docs (`docs/`)** — [DESIGN-DECISIONS.md](docs/DESIGN-DECISIONS.md)
   (trade-off reasoning for every major choice) and
   [COST.md](docs/COST.md) (full cost breakdown, teardown checklist).
@@ -181,7 +227,7 @@ make up
 make kubeconfig
 kubectl get nodes
 
-# ... do your demo / interview walkthrough / testing ...
+# ... verify workloads, run smoke tests, inspect dashboards ...
 
 # 6. Tear it all down when you're done
 make down
@@ -210,12 +256,12 @@ eks-platform/
 │   └── policies/
 │       └── alb-controller-policy.json
 ├── charts/
-│   ├── microservice/          # the one generic chart backing all 10 services
+│   ├── microservice/          # the one generic chart backing all 12 services
 │   │   ├── Chart.yaml
 │   │   ├── values.yaml        # conservative defaults — everything opt-in
 │   │   └── templates/         # deployment, service, hpa, ingress, serviceaccount,
 │   │                          # servicemonitor, virtualservice, destinationrule
-│   └── values/                # 10 per-service values files (svc-01..svc-10)
+│   └── values/                # 12 per-service values files, named after each service
 ├── argocd/
 │   ├── root-app.yaml          # the one manifest applied by hand; self-manages from here
 │   ├── apps/
@@ -226,7 +272,8 @@ eks-platform/
 │       ├── namespaces/
 │       ├── cert-manager/      # self-signed ClusterIssuer
 │       └── istio/             # mesh-wide PeerAuthentication (STRICT mTLS)
-├── apps/                      # (placeholder) demo microservice source — not written yet
+├── apps/
+│   └── README.md              # pointer: app source lives in the sibling devsecops-pipeline repo
 ├── docs/
 │   ├── DESIGN-DECISIONS.md    # the "why" behind every major choice
 │   └── COST.md                # per-resource cost table, teardown checklist

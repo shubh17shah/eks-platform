@@ -1,0 +1,14 @@
+# auth-service — authenticates devices and platform users and issues/
+# validates the tokens api-gateway checks on every request. Internal only,
+# ClusterIP — no ingress, every call reaches it through api-gateway. The
+# second and last service in this set of 12 with the Istio sidecar on: it's
+# the one internal hop nearly every authenticated request depends on, so
+# it's the natural place (alongside api-gateway) to demonstrate the
+# VirtualService/DestinationRule retry, timeout and circuit-breaking policy
+# defined in the base chart. Still no ingress or HPA — fixed at 1 replica
+# to keep the sandbox cheap.
+nameOverride: auth-service
+serviceName: auth-service
+
+istio:
+  enabled: true

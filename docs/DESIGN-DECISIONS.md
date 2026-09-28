@@ -11,9 +11,9 @@ provisions the VPC, the EKS cluster, one managed node group, and the IRSA
 IAM role/policy for the AWS Load Balancer Controller — but nobody has run
 `terraform apply` against a real account (no state file exists). Separately,
 `charts/microservice/` (one generic Helm chart) plus `charts/values/`
-(10 per-service values files) and `argocd/` (a full app-of-apps: namespaces,
+(12 per-service values files) and `argocd/` (a full app-of-apps: namespaces,
 metrics-server, cert-manager, Istio, kube-prometheus-stack, the ALB
-controller, and 10 microservice Applications, all sync-wave ordered) are
+controller, and 12 microservice Applications, all sync-wave ordered) are
 completely written out. What's still missing is the glue between the two
 layers: nothing in this repo installs ArgoCD itself into the cluster (no
 Terraform `helm_release`, no bootstrap script) — that's a manual, one-time
@@ -42,13 +42,13 @@ profiles. *(Implemented.)*
 
 **Why managed node groups:**
 Fargate bills per vCPU/GB-second per pod, rounded up, with no bin-packing
-across pods — for a demo running several small services plus sidecars and
+across pods — for a cluster running several small services plus sidecars and
 controllers, that's typically *more* expensive than two small SPOT EC2
 boxes sharing the cost. Fargate also doesn't run DaemonSets, which rules out
 node-level tooling this platform wants (node-exporter for Prometheus, and
 eventually Istio's per-node components), and pod startup on Fargate is
-noticeably slower (a new ENI has to attach) — that undercuts the point of an
-HPA/load-test demo, which should show pods scaling up snappily.
+noticeably slower (a new ENI has to attach) — which undermines HPA responsiveness
+under the bursty load this platform's ingest path sees.
 
 A self-managed ASG gives full control (custom AMI, custom kubelet flags) but
 you own AMI patch pipelines, node draining during upgrades, and wiring node
@@ -122,6 +122,16 @@ installed, which nothing here automates yet). From there it watches
 `argocd/apps/` recursively and self-manages: every file ArgoCD finds
 becomes an Application it creates, syncs, prunes, and heals.
 
+This is no longer purely hypothetical: application CI exists, in the
+sibling `devsecops-pipeline` repo (see `apps/README.md`), and it is a
+concrete example of the "push" alternative below being deliberately kept
+out of this cluster's reach. That CI builds, scans, signs and publishes
+`ghcr.io/shubh17shah/telemetry-service`, then commits an `image.tag` bump
+into `charts/microservice/values.yaml` **here** — it never holds a
+kubeconfig or IAM role that can reach the cluster. ArgoCD is the only thing
+with cluster-write access, and it only acts on what's committed to this
+repo.
+
 Sync-wave annotations enforce dependency order, and they're concrete, not
 theoretical: `argocd/apps/platform/namespaces.yaml` lands at wave `-10`
 (the `apps` namespace needs its `istio-injection: enabled` label attached
@@ -131,7 +141,7 @@ the `aws-load-balancer-controller` all land at wave `0`. Two Applications
 that depend on CRDs those installs create — `cert-manager-issuer` (the
 self-signed `ClusterIssuer`) and `istiod` — land at wave `1`, and
 `istio-mesh-policy` (the mesh-wide `PeerAuthentication: STRICT`) waits for
-wave `2` since it needs istiod actually running to enforce anything. All 10
+wave `2` since it needs istiod actually running to enforce anything. All 12
 microservice Applications sit at wave `10`, after every platform dependency
 is healthy.
 
@@ -231,8 +241,8 @@ with a single variable; `vpc.tf` and `eks.tf` both branch on it.)*
 
 **Why:** a NAT Gateway bills hourly (roughly $0.045–0.06/hr depending on
 region, ~$32–45/month) plus per-GB data processing, *whether or not a
-single byte crosses it*. For a cluster meant to run for a few hours around
-an interview conversation, that's the single largest "always-on" line item
+single byte crosses it*. For a cluster that runs for a few hours at a time,
+that's the single largest "always-on" line item
 after the control plane itself, for essentially zero actual usage most of
 the time.
 
@@ -303,38 +313,45 @@ blast radius doesn't span the whole account.
 
 ---
 
-## 7. One generic Helm chart + 10 values files, instead of 10 charts
+## 7. One generic Helm chart + 12 values files, instead of 12 charts
 
 **Decision (implemented):** `charts/microservice/` is one parameterized
 chart (Deployment, Service, HPA, Ingress, ServiceAccount, ServiceMonitor,
 Istio VirtualService/DestinationRule — all templated and mostly opt-in) and
-`charts/values/svc-01.yaml` through `svc-10.yaml` are 10 thin values files,
-one per demo service, rather than 10 independent charts.
+`charts/values/*.yaml` (one file per service, named to match it —
+`api-gateway.yaml`, `auth-service.yaml`, etc.) are 12 thin values files, one
+per platform service, rather than 12 independent charts.
 
 **Alternatives considered:** an independent chart per service (its own
 `templates/` directory each); or a single chart with no per-service
 customization at all.
 
-**Why one chart + many values files:** the 10 demo services (`api-gateway`,
-`auth-service`, `catalog-service`, `cart-service`, `order-service`,
-`payment-service`, `notification-service`, `search-service`,
-`user-service`, `inventory-service`) share the same Kubernetes shape — one
-Deployment, one Service, optionally an HPA, Ingress, and Istio sidecar. 10
-separate charts would mean 10 copies of the same template logic, so a fix
-like "every service needs `readOnlyRootFilesystem`" becomes 10 PRs (or a
+**Why one chart + many values files:** the 12 platform services
+(`api-gateway`, `auth-service`, `user-service`, `device-service`,
+`telemetry-ingest`, `telemetry-query`, `alert-service`,
+`notification-service`, `report-service`, `config-service`,
+`audit-service`, `scheduler-service`) share the same Kubernetes shape — one
+Deployment, one Service, optionally an HPA, Ingress, and Istio sidecar. 12
+separate charts would mean 12 copies of the same template logic, so a fix
+like "every service needs `readOnlyRootFilesystem`" becomes 12 PRs (or a
 scripted find-and-replace, its own bug source) instead of one. The values
 files stay genuinely thin because the chart's defaults
 (`charts/microservice/values.yaml`) are deliberately conservative —
 Ingress, HPA, and the Istio sidecar are all `enabled: false` by default —
-so most of the 10 values files are a handful of comment lines plus a
+so most of the 12 values files are a handful of comment lines plus a
 `nameOverride`, and the interesting ones are interesting *because* they
-override something: `svc-01.yaml` (`api-gateway`) is the only one with
-Ingress on (the one public entry point) and pairs it with an HPA;
-`svc-08.yaml` (`search-service`) gets the second and only other HPA (its
-query load is the most naturally bursty of the 10, making it the clearest
-autoscaling demo); `svc-01.yaml` and `svc-06.yaml` (`payment-service`) are
-the only two with the Istio sidecar on. A reviewer scanning a values file
-sees exactly what makes that service different, not a wall of boilerplate.
+override something: `api-gateway.yaml` is the only one with Ingress on
+(the one public entry point) and pairs it with an HPA; `telemetry-ingest.yaml`
+(the RabbitMQ consumer writing into Timescale) and `telemetry-query.yaml`
+(the Timescale read path) get the platform's other two HPAs — the two
+genuinely bursty workloads, tied to device-fleet activity and dashboard/
+alert read patterns rather than steady CRUD traffic; `api-gateway.yaml` and
+`auth-service.yaml` are the only two with the Istio sidecar on; and
+`scheduler-service.yaml` is the one file that pins `replicaCount: 1`
+explicitly, because it's leader-elected and enabling its HPA would be an
+active bug (duplicate leaders double-dispatching jobs), not just wasted
+spend. A reviewer scanning a values file sees exactly what makes that
+service different, not a wall of boilerplate.
 
 **What it costs:** a generic chart's templates inevitably grow
 `{{- if }}` branches for the services that don't fit the common shape. This
@@ -359,14 +376,14 @@ own release lifecycle) without duplicating template YAML.
 
 ## 8. Istio on t3.small: sidecar memory overhead — the honest version
 
-**Decision (implemented as code — Istio's control plane + 2 of 10 sidecars
+**Decision (implemented as code — Istio's control plane + 2 of 12 sidecars
 are fully defined, not yet running against a live cluster):**
 `argocd/apps/platform/istio-base.yaml` and `istiod.yaml` install Istio's
 CRDs and control plane; `argocd/manifests/istio/peer-authentication.yaml`
-turns on mesh-wide `STRICT` mTLS for the `apps` namespace. Only 2 of the 10
-services — `api-gateway` (`svc-01.yaml`) and `payment-service`
-(`svc-06.yaml`) — actually opt into the sidecar (`istio.enabled: true`);
-the other 8 explicitly opt back *out* of the namespace-wide injection with
+turns on mesh-wide `STRICT` mTLS for the `apps` namespace. Only 2 of the 12
+services — `api-gateway` (`api-gateway.yaml`) and `auth-service`
+(`auth-service.yaml`) — actually opt into the sidecar (`istio.enabled: true`);
+the other 10 explicitly opt back *out* of the namespace-wide injection with
 `sidecar.istio.io/inject: "false"` (see `deployment.yaml`'s template — the
 `apps` namespace itself carries `istio-injection: enabled`, so opting out
 has to be explicit per pod, not just "don't turn it on"). All of this runs
@@ -387,26 +404,26 @@ to 10m CPU / 64Mi requested (100m / 128Mi limit) — a real, deliberate
 mitigation already baked into this repo's config, not a hypothetical one.
 Even scaled down, every meshed pod still carries a second full container:
 Envoy's own process overhead, plus istiod itself budgeted at 50m/128Mi
-requested. That's exactly why only 2 of 10 services carry a sidecar instead
+requested. That's exactly why only 2 of 12 services carry a sidecar instead
 of the whole `apps` namespace inheriting one by default — `api-gateway`
 because it's the edge (worth demonstrating retries/timeouts on the one path
-every request crosses) and `payment-service` because it's the most
-failure-sensitive internal hop (a stuck upstream shouldn't hang a payment
-call indefinitely). Meshing all 10 services on this node group, even with
+every request crosses) and `auth-service` because it's the most
+failure-sensitive internal hop (nearly every authenticated request depends
+on it; a stuck auth call shouldn't cascade into every other service
+blocking). Meshing all 12 services on this node group, even with
 the trimmed sidecar footprint, would leave little headroom once
 kube-prometheus-stack, cert-manager, the ALB controller, and istiod itself
 are also running on the same 2 nodes.
 
-**Why accept it anyway for this project:** the goal is to demonstrate mTLS
-and resilience *mechanics* for an interview conversation, not to run
-production traffic. Two mesh-injected services with real
+**Why accept it anyway in this environment:** the goal is to exercise mTLS
+and resilience *mechanics* in a sandbox, not to carry production traffic. Two mesh-injected services with real
 `PeerAuthentication: STRICT` mTLS, retries, timeouts, and outlier-detection
 circuit breaking (see `charts/microservice/templates/virtualservice.yaml`
 and `destinationrule.yaml`) is enough to show `istioctl proxy-status` and a
 working policy, without sizing nodes to comfortably fit a cluster-wide mesh
 and blowing the cost budget this whole design is built around.
 
-**What production (or a more serious demo) would do differently:**
+**What production would do differently:**
 - Move to **Istio's ambient mesh mode** — no per-pod sidecar, a shared
   per-node `ztunnel` instead. This is the specific feature Istio built to
   solve exactly this sidecar-tax problem.
@@ -415,5 +432,5 @@ and blowing the cost budget this whole design is built around.
   mesh-wide.
 - Or, in a genuinely cost-constrained sandbox, skip the sidecar model
   entirely and demonstrate mTLS/traffic-splitting with a lighter proxy
-  (Linkerd) or an Ingress-level canary via ALB weighted target groups —
-  and say plainly in the interview why that trade-off was made.
+  (Linkerd) or an Ingress-level canary via ALB weighted target groups,
+  documenting the trade-off explicitly.

@@ -1,0 +1,15 @@
+# telemetry-query — serves read queries against TimescaleDB (dashboards,
+# alert-service's threshold checks, ad-hoc API calls proxied through
+# api-gateway). Read load is spiky in its own way — a dashboard being
+# opened, or alert-service polling recent readings across the fleet — so
+# this is the platform's other HPA. No ingress: still only reachable
+# through api-gateway. No Istio sidecar: kept off here for the same
+# memory-budget reason as everywhere except api-gateway/auth-service.
+nameOverride: telemetry-query
+serviceName: telemetry-query
+
+hpa:
+  enabled: true
+  minReplicas: 1
+  maxReplicas: 4
+  targetCPUUtilizationPercentage: 70

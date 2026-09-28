@@ -2,7 +2,7 @@
 # Prometheus + Grafana + Alertmanager + kube-state-metrics + node-exporter,
 # all from one chart. serviceMonitorSelectorNilUsesHelmValues: false is the
 # key setting — without it, Prometheus only scrapes ServiceMonitors
-# carrying this release's own Helm label, so the 10 microservices'
+# carrying this release's own Helm label, so the 12 microservices'
 # ServiceMonitors (in the "apps" namespace, unrelated release) would be
 # silently ignored.
 apiVersion: argoproj.io/v1alpha1

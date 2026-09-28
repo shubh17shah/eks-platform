@@ -1,5 +1,5 @@
-# inventory-service — one Helm release of the shared charts/microservice chart,
-# parameterized by charts/values/svc-10.yaml. Sync-wave 10 so every platform
+# alert-service — one Helm release of the shared charts/microservice chart,
+# parameterized by charts/values/alert-service.yaml. Sync-wave 10 so every platform
 # component (namespaces, cert-manager, the ALB controller, metrics-server,
 # istiod, kube-prometheus-stack) is already healthy before this deploys —
 # the chart's ServiceMonitor/VirtualService/Ingress all depend on CRDs
@@ -7,7 +7,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: inventory-service
+  name: alert-service
   namespace: argocd
   annotations:
     argocd.argoproj.io/sync-wave: "10"
@@ -19,7 +19,7 @@ spec:
     path: charts/microservice
     helm:
       valueFiles:
-        - ../values/svc-10.yaml
+        - ../values/alert-service.yaml
   destination:
     server: https://kubernetes.default.svc
     namespace: apps

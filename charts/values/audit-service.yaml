@@ -1,0 +1,6 @@
+# audit-service — append-only log of who changed what (device config
+# changes, user/auth events) for compliance and incident review. Internal
+# only, ClusterIP. Fixed at 1 replica: writes are low-volume and
+# append-only, nothing here justifies an HPA or the Istio sidecar.
+nameOverride: audit-service
+serviceName: audit-service

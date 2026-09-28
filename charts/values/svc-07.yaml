@@ -1,3 +1,0 @@
-# notification-service — internal only, ClusterIP. Fixed at 1 replica.
-nameOverride: notification-service
-serviceName: notification-service

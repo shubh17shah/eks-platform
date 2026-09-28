@@ -1,0 +1,8 @@
+# notification-service — consumes alert events off RabbitMQ (published by
+# alert-service) and fans them out as email/SMS via a third-party provider.
+# Internal only, ClusterIP. Fixed at 1 replica: even at peak alert volume
+# this stays well under what would trip an HPA, and a failed send just
+# retries off the queue rather than blocking anything upstream — not worth
+# a second replica or the Istio sidecar for that.
+nameOverride: notification-service
+serviceName: notification-service

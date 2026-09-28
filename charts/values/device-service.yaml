@@ -1,0 +1,8 @@
+# device-service — the device registry: create/list/deprovision the IoT
+# devices that send telemetry, and the source of truth other services
+# (telemetry-ingest, config-service) check a device ID against. Internal
+# only, ClusterIP. Fixed at 1 replica — registry writes are infrequent
+# provisioning events, not telemetry-volume traffic, so it doesn't need an
+# HPA or the Istio sidecar.
+nameOverride: device-service
+serviceName: device-service

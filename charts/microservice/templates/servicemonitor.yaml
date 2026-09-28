@@ -5,7 +5,7 @@
 # ServiceMonitor in the cluster, not just ones carrying its own release
 # label. Requires the kube-prometheus-stack CRDs to already exist, which
 # ArgoCD sync-wave ordering guarantees (platform components sync before
-# any of the 10 microservice apps).
+# any of the 12 microservice apps).
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:

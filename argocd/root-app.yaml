@@ -7,7 +7,7 @@
 #   kubectl apply -n argocd -f argocd/root-app.yaml
 #
 # Sync-wave annotations on the child Applications (platform components at
-# negative/low waves, the 10 microservices at wave 10) make platform
+# negative/low waves, the 12 microservices at wave 10) make platform
 # infrastructure land before anything that depends on it — see
 # argocd/apps/platform/ for the ordering.
 apiVersion: argoproj.io/v1alpha1

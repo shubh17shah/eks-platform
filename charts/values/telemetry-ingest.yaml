@@ -1,0 +1,22 @@
+# telemetry-ingest — consumes device telemetry off RabbitMQ and writes it
+# into TimescaleDB. This is the service whose load genuinely spikes with
+# device-fleet activity (a firmware rollout, or a network blip reconnecting
+# thousands of devices at once, floods the queue), so it's one of the
+# platform's two HPAs — more consumer replicas keep queue depth (and
+# therefore ingest lag) from growing unbounded. Scaling here is still
+# plain CPU-based, not queue-depth-based (this chart has no KEDA /
+# RabbitMQ metrics adapter wired up) — a reasonable proxy, since a growing
+# backlog means more messages decoded and written per second, i.e. more
+# CPU, but a real production setup would scale on queue depth directly.
+# No ingress: RabbitMQ is the only thing that talks to it. No Istio
+# sidecar: async consumer replicas pulling off a queue don't get much out
+# of the sidecar's HTTP retry/circuit-breaking policy, so it's not worth
+# the memory here.
+nameOverride: telemetry-ingest
+serviceName: telemetry-ingest
+
+hpa:
+  enabled: true
+  minReplicas: 1
+  maxReplicas: 4
+  targetCPUUtilizationPercentage: 70

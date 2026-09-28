@@ -1,0 +1,12 @@
+# scheduler-service — dispatches cron-like jobs (triggers report-service's
+# aggregation runs, periodic device-config re-push, etc.) on a fixed
+# schedule. Leader-elected: only one replica is ever meant to be active, so
+# replicaCount is pinned to 1 explicitly below (not just left to inherit
+# the chart default) as a deliberate reminder — this is the one service in
+# the platform where turning on the HPA would be an active bug, not just a
+# wasted resource. Two replicas racing the same leader election means
+# every scheduled job risks firing twice. No ingress, no HPA, no Istio
+# sidecar.
+nameOverride: scheduler-service
+serviceName: scheduler-service
+replicaCount: 1

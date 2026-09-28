@@ -1,0 +1,50 @@
+# api-gateway — the platform's one public entry point for the telemetry
+# API (device auth, telemetry queries, config pushes — everything proxied
+# through here). Deliberately the only service in this set of 12 with
+# Ingress, HPA and an Istio sidecar all turned on, so it doubles as the
+# reference for every feature the base chart supports; the other 11 stay minimal
+# to keep the 2-node sandbox affordable.
+nameOverride: api-gateway
+serviceName: api-gateway
+
+# Ignored once hpa.enabled is true below (see deployment.yaml) — left here
+# just as documentation of the starting point before the HPA takes over.
+replicaCount: 2
+
+ingress:
+  enabled: true
+  className: alb
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
+    alb.ingress.kubernetes.io/ssl-redirect: "443"
+    # cert-manager watches this annotation and issues/renews the Secret
+    # named below automatically. Dev/this sandbox has no delegated public
+    # domain, so it points at a self-signed ClusterIssuer on an
+    # internal-only hostname (api.telemetry.internal — doesn't resolve
+    # anywhere outside the cluster). Stage/prod would swap this to a
+    # Let's Encrypt ClusterIssuer backed by a real Route53-hosted zone
+    # instead — see argocd/manifests/cert-manager/cluster-issuer.yaml for
+    # both issuer shapes.
+    cert-manager.io/cluster-issuer: selfsigned-cluster-issuer
+  host: api.telemetry.internal
+  path: /
+  pathType: Prefix
+  tls:
+    - hosts:
+        - api.telemetry.internal
+      secretName: api-gateway-tls
+
+hpa:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 4
+  targetCPUUtilizationPercentage: 70
+
+# The first of two services with the Istio sidecar on — see auth-service.yaml
+# for the second. Every request crosses this hop, so it's the natural place
+# to exercise the VirtualService/DestinationRule retry, timeout and
+# circuit-breaking policy defined in the base chart.
+istio:
+  enabled: true

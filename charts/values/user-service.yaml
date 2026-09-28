@@ -1,0 +1,7 @@
+# user-service — CRUD for platform user accounts (the humans who own
+# devices and view telemetry — distinct from auth-service, which only
+# handles authn/authz, not profile data). Internal only, ClusterIP. Fixed
+# at 1 replica: low, steady request volume, nothing here justifies an HPA
+# or the Istio sidecar tax.
+nameOverride: user-service
+serviceName: user-service

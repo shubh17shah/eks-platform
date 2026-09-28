@@ -1,5 +1,5 @@
-# cart-service — one Helm release of the shared charts/microservice chart,
-# parameterized by charts/values/svc-04.yaml. Sync-wave 10 so every platform
+# scheduler-service — one Helm release of the shared charts/microservice chart,
+# parameterized by charts/values/scheduler-service.yaml. Sync-wave 10 so every platform
 # component (namespaces, cert-manager, the ALB controller, metrics-server,
 # istiod, kube-prometheus-stack) is already healthy before this deploys —
 # the chart's ServiceMonitor/VirtualService/Ingress all depend on CRDs
@@ -7,7 +7,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: cart-service
+  name: scheduler-service
   namespace: argocd
   annotations:
     argocd.argoproj.io/sync-wave: "10"
@@ -19,7 +19,7 @@ spec:
     path: charts/microservice
     helm:
       valueFiles:
-        - ../values/svc-04.yaml
+        - ../values/scheduler-service.yaml
   destination:
     server: https://kubernetes.default.svc
     namespace: apps

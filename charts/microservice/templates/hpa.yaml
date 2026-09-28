@@ -31,7 +31,7 @@ spec:
     {{- end }}
   behavior:
     # Scale up fast, scale down slow — avoids flapping replicas on a bursty
-    # demo workload while still reacting quickly when load actually shows up.
+    # sandbox workload while still reacting quickly when load actually shows up.
     scaleDown:
       stabilizationWindowSeconds: 120
     scaleUp:

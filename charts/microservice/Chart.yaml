@@ -2,9 +2,9 @@ apiVersion: v2
 name: microservice
 description: >-
   Generic, reusable Helm chart for stateless HTTP microservices on the
-  eks-platform cluster. One chart, many releases: each of the 10 demo
-  services is this same chart deployed with a different values file
-  (see charts/values/). Do not fork this chart per service.
+  eks-platform cluster. One chart, many releases: each of the 12 telemetry
+  platform services is this same chart deployed with a different values
+  file (see charts/values/). Do not fork this chart per service.
 type: application
 version: 0.1.0
 appVersion: "1.0.0"
