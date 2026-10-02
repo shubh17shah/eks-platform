@@ -1,0 +1,13 @@
+# Code owners for this repo.
+#
+# GitHub auto-requests a review from the listed owner(s) on any PR touching
+# a matched path, and (if "Require review from Code Owners" is turned on
+# under branch protection) blocks merging without it. One rule, one owner,
+# covering the whole tree — this is a single-maintainer project, so the
+# point isn't distributing review load, it's making sure nothing merges
+# into infrastructure-as-code (Terraform state, IAM policy, cluster config)
+# without the owner explicitly looking at the diff first.
+#
+# See https://docs.github.com/articles/about-code-owners
+
+* @shubh17shah

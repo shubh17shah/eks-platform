@@ -1,0 +1,159 @@
+---
+# PR validation for the Terraform, Helm, and ArgoCD layers of this repo.
+#
+# Deliberately AWS-credential-free: every job here is exactly what
+# `make validate` / `make lint` / `helm lint` / `yamllint` already do
+# locally (see CONTRIBUTING.md) — `terraform init -backend=false` means no
+# backend.tf, no state, no AWS account needed to validate a PR. Nothing in
+# this file requires a repo secret beyond the ephemeral, auto-issued
+# GITHUB_TOKEN (used only so tflint's plugin download doesn't hit
+# unauthenticated GitHub API rate limits).
+name: terraform-ci
+
+on:
+  pull_request:
+    paths:
+      - "terraform/**"
+      - "bootstrap/**"
+      - "charts/**"
+      - "argocd/**"
+      - ".github/workflows/terraform-ci.yml"
+      - ".tflint.hcl"
+      - ".yamllint.yml"
+  push:
+    branches: [main]
+    paths:
+      - "terraform/**"
+      - "bootstrap/**"
+      - "charts/**"
+      - "argocd/**"
+      - ".github/workflows/terraform-ci.yml"
+      - ".tflint.hcl"
+      - ".yamllint.yml"
+  workflow_dispatch: {}
+
+# Cancel a stale run on a branch the moment a new commit supersedes it —
+# no reason to keep validating a PR revision nobody will look at.
+concurrency:
+  group: terraform-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Default to no access; jobs below don't elevate this. Read-only is enough
+# to check out the repo — nothing here writes back to it.
+permissions:
+  contents: read
+
+env:
+  TF_VERSION: "1.9.8"
+  TFLINT_VERSION: "v0.53.0"
+  HELM_VERSION: "v3.15.4"
+  YAMLLINT_VERSION: "1.35.1"
+
+jobs:
+  terraform:
+    name: terraform (${{ matrix.directory }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Both Terraform roots in this repo — bootstrap/ (local state,
+        # creates the S3 backend) and terraform/ (the main stack, which
+        # has no committed backend.tf, hence -backend=false below).
+        directory: ["terraform", "bootstrap"]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: terraform fmt -check
+        working-directory: ${{ matrix.directory }}
+        run: terraform fmt -check -recursive -diff
+
+      - name: terraform init (no backend, no credentials)
+        working-directory: ${{ matrix.directory }}
+        run: terraform init -backend=false -input=false
+
+      - name: terraform validate
+        working-directory: ${{ matrix.directory }}
+        run: terraform validate
+
+      - name: Set up tflint
+        uses: terraform-linters/setup-tflint@v4
+        with:
+          tflint_version: ${{ env.TFLINT_VERSION }}
+
+      - name: tflint --init (install the aws ruleset plugin)
+        working-directory: ${{ matrix.directory }}
+        env:
+          # Ephemeral, auto-issued per run — not a configured repo secret.
+          # Only avoids unauthenticated GitHub API rate limits on the
+          # plugin download.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: tflint --init --config "${{ github.workspace }}/.tflint.hcl"
+
+      - name: tflint
+        working-directory: ${{ matrix.directory }}
+        run: tflint --config "${{ github.workspace }}/.tflint.hcl" --format compact
+
+  discover-values:
+    name: Discover charts/values/*.yaml
+    runs-on: ubuntu-latest
+    outputs:
+      files: ${{ steps.list.outputs.files }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: List per-service values files
+        id: list
+        run: |
+          files=$(cd charts/values && ls -1 *.yaml | jq -R -s -c 'split("\n") | map(select(length > 0))')
+          echo "Found values files: $files"
+          echo "files=$files" >> "$GITHUB_OUTPUT"
+
+  helm:
+    name: helm lint (${{ matrix.values_file }})
+    needs: discover-values
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      # One matrix entry per file in charts/values/, generated above instead
+      # of hardcoded here — a new service file is covered automatically,
+      # and a values file that only breaks one service fails on its own
+      # job instead of hiding behind the other 11 passing.
+      matrix:
+        values_file: ${{ fromJson(needs.discover-values.outputs.files) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: ${{ env.HELM_VERSION }}
+
+      - name: helm lint
+        run: helm lint charts/microservice --values "charts/values/${{ matrix.values_file }}" --strict
+
+  yaml:
+    name: yamllint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install yamllint
+        run: pip install "yamllint==${{ env.YAMLLINT_VERSION }}"
+
+      - name: yamllint
+        run: yamllint --config-file .yamllint.yml argocd/ charts/values/

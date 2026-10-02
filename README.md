@@ -1,5 +1,7 @@
 # eks-platform
 
+[![terraform-ci](https://github.com/shubh17shah/eks-platform/actions/workflows/terraform-ci.yml/badge.svg)](https://github.com/shubh17shah/eks-platform/actions/workflows/terraform-ci.yml)
+
 A cost-conscious AWS EKS platform — Terraform for the cluster, ArgoCD
 (GitOps) for 12 IoT telemetry microservices (PostgreSQL/TimescaleDB, Redis,
 RabbitMQ) behind Istio, cert-manager, and an ALB — built as a DevOps

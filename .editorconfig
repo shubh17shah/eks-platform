@@ -1,0 +1,39 @@
+# https://editorconfig.org
+# Keeps formatting consistent across editors without relying on everyone
+# having the same IDE settings. `terraform fmt` and `helm lint` still own
+# the final word on .tf/.yaml formatting — this just stops stray tabs,
+# trailing whitespace, and mixed line endings from showing up in diffs.
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 2
+
+[*.{yaml,yml}]
+indent_style = space
+indent_size = 2
+
+[*.tf]
+indent_style = space
+indent_size = 2
+
+[*.json]
+indent_style = space
+indent_size = 2
+
+[*.md]
+indent_style = space
+indent_size = 2
+# Markdown uses trailing double-space for hard line breaks in a few places
+# (README/docs) — don't strip it.
+trim_trailing_whitespace = false
+
+# Makefiles REQUIRE tab-indented recipe lines — a space there breaks every
+# target with "missing separator". Do not change this to spaces.
+[Makefile]
+indent_style = tab

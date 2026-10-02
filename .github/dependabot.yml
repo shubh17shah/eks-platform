@@ -1,0 +1,31 @@
+# Keeps provider/module version constraints and the CI workflow's pinned
+# action SHAs/tags from quietly going stale. Both ecosystems only ever open
+# a PR — nothing here auto-merges, and terraform-ci.yml (no AWS credentials
+# required) runs on every PR Dependabot opens the same as any other.
+version: 2
+updates:
+  # terraform/, bootstrap/ — provider version constraints in providers.tf
+  # and required_providers blocks (hashicorp/aws, hashicorp/kubernetes,
+  # hashicorp/helm).
+  - package-ecosystem: "terraform"
+    directories:
+      - "/terraform"
+      - "/bootstrap"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "chore(deps)"
+    labels:
+      - "dependencies"
+      - "terraform"
+
+  # Action versions pinned in .github/workflows/*.yml.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "chore(deps)"
+    labels:
+      - "dependencies"
+      - "github-actions"

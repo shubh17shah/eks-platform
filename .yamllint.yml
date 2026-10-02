@@ -1,0 +1,54 @@
+# yamllint config for this repo. Run with:
+#   yamllint --config-file .yamllint.yml argocd/ charts/values/
+#
+# Scope deliberately excludes charts/microservice/templates/ — those files
+# are Go template syntax (`{{ .Values.foo }}`, `{{- if ... }}`) wrapped in
+# YAML-shaped indentation, not valid standalone YAML. `helm lint` /
+# `helm template` are the right tools for that directory; yamllint would
+# just produce noise (or outright parse errors) trying to treat template
+# directives as YAML syntax.
+extends: default
+
+ignore: |
+  charts/microservice/templates/
+  .terraform/
+
+rules:
+  line-length:
+    # The repo's prose comments (in values files especially) regularly run
+    # long to stay in one place rather than wrapping mid-thought. 80 is
+    # unrealistically strict for that style; 120 catches genuinely
+    # unwieldy lines without fighting it.
+    max: 120
+    level: warning
+
+  document-start:
+    # argocd/*.yaml and charts/values/*.yaml don't use `---` document
+    # markers, and there's no multi-document YAML in this repo that would
+    # need them.
+    present: false
+
+  comments:
+    # Default requires 2 spaces before an inline comment; this repo's
+    # style doesn't police that strictly in values files.
+    min-spaces-from-content: 1
+
+  comments-indentation: disable
+
+  truthy:
+    # ArgoCD/Helm values commonly use bare `true`/`false`, but also things
+    # like `"true"` as string annotation values (e.g. ALB controller
+    # annotations) — default 'truthy' already allows both; just make sure
+    # YAML 1.1-style words like on/off/yes/no in annotation values (e.g.
+    # `alb.ingress.kubernetes.io/scheme: internet-facing`) aren't an issue.
+    check-keys: false
+
+  braces:
+    # Helm/ArgoCD values files use flow-style maps/lists for compact
+    # annotations and label selectors (e.g.
+    # `alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}]'`) — don't
+    # force everything to block style.
+    max-spaces-inside: 1
+
+  brackets:
+    max-spaces-inside: 1
